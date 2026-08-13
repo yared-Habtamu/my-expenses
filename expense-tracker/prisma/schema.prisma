@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  handle       String?       @unique
+  name         String
+  email        String        @unique
+  createdAt    DateTime      @default(now())
+  accounts     Account[]
+  transactions Transaction[]
+  smsLogs      SmsLog[]
+  appSetting   AppSetting?
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  provider     String
+  label        String
+  balanceCents Int           @default(0)
+  currency     String        @default("ETB")
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  @@index([userId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  provider    String
+  type        String
+  amountCents Int
+  currency    String   @default("ETB")
+  merchant    String?
+  referenceId String   @unique
+  tag         String?
+  occurredAt  DateTime
+  userId      String
+  accountId   String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account     Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  @@index([userId, occurredAt])
+}
+
+model SmsLog {
+  id          String   @id @default(cuid())
+  provider    String
+  sender      String?
+  payload     String
+  parsed      Boolean  @default(false)
+  error       String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  @@index([provider, createdAt])
+}
+
+model AppSetting {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  smsListener Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+}
