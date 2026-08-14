@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ArrowDownLeft, ArrowUpRight, CreditCard, Smartphone } from 'lucide-react'
 import { formatDate, formatEtb } from '@/lib/format'
+import { ChartTooltip } from '@/components/chart-tooltip'
+import { StatCard } from '@/components/stat-card'
 
 interface Analytics {
   monthSpendCents: number
@@ -37,27 +39,43 @@ interface Transaction {
   occurredAt: string
 }
 
+const PERIODS = [
+  { label: 'All', value: 'All' },
+  { label: 'Daily', value: 'Day' },
+  { label: 'Weekly', value: 'Week' },
+  { label: 'Monthly', value: 'Month' },
+]
+
 export default function Dashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [period, setPeriod] = useState('All')
   const [name, setName] = useState('')
 
   useEffect(() => {
     Promise.all([
       fetch('/api/analytics').then((r) => r.json()),
       fetch('/api/accounts').then((r) => r.json()),
-      fetch('/api/transactions?limit=6').then((r) => r.json()),
       fetch('/api/settings').then((r) => r.json()),
     ])
-      .then(([a, acct, txn, s]) => {
+      .then(([a, acct, s]) => {
         setAnalytics(a.analytics)
         setAccounts(acct.accounts)
-        setTransactions(txn.transactions)
         setName(s.settings?.name ?? '')
       })
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    params.set('limit', '6')
+    if (period !== 'All') params.set('period', period)
+    fetch(`/api/transactions?${params}`)
+      .then((r) => r.json())
+      .then((d) => setTransactions(d.transactions))
+      .catch(() => {})
+  }, [period])
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const firstName = name.split(' ')[0] || 'there'
@@ -69,26 +87,10 @@ export default function Dashboard() {
       <p className="mt-2 text-sm text-muted-foreground">Here is your financial overview for {analytics?.month ?? 'this month'}.</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Monthly spend</span><ArrowDownLeft className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{analytics ? formatEtb(analytics.monthSpendCents) : '…'}</p>
-          <p className="mt-2 text-xs text-primary">{analytics ? `${analytics.monthCount} transactions` : ''}</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Income</span><ArrowUpRight className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{analytics ? formatEtb(analytics.monthIncomeCents) : '…'}</p>
-          <p className="mt-2 text-xs text-primary">{analytics && analytics.monthIncomeCents > 0 ? 'Credits this month' : 'No income yet'}</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Total balance</span><Smartphone className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{analytics ? formatEtb(analytics.totalBalanceCents) : '…'}</p>
-          <p className="mt-2 text-xs text-primary">Across {accounts.length} accounts</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Top category</span><CreditCard className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{analytics?.categories[0]?.tag ?? '—'}</p>
-          <p className="mt-2 text-xs text-primary">{analytics?.categories[0] ? formatEtb(analytics.categories[0].amount) : ''}</p>
-        </div>
+        <StatCard label="Monthly spend" icon={ArrowDownLeft} accent="rose" value={analytics ? formatEtb(analytics.monthSpendCents) : '…'} caption={analytics ? `${analytics.monthCount} transactions` : ''} />
+        <StatCard label="Income" icon={ArrowUpRight} accent="emerald" value={analytics ? formatEtb(analytics.monthIncomeCents) : '…'} caption={analytics && analytics.monthIncomeCents > 0 ? 'Credits this month' : 'No income yet'} />
+        <StatCard label="Total balance" icon={Smartphone} accent="sky" value={analytics ? formatEtb(analytics.totalBalanceCents) : '…'} caption={`Across ${accounts.length} accounts`} />
+        <StatCard label="Top category" icon={CreditCard} accent="violet" value={analytics?.categories[0]?.tag ?? '—'} caption={analytics?.categories[0] ? formatEtb(analytics.categories[0].amount) : ''} />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
@@ -100,15 +102,15 @@ export default function Dashboard() {
               <AreaChart data={(analytics?.daily ?? []).map((d) => ({ ...d, label: formatDate(d.date) }))}>
                 <defs>
                   <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity=".25" />
-                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity="0" />
+                    <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity=".3" />
+                    <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="var(--color-border)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => formatEtb(Number(v))} />
-                <Area type="monotone" dataKey="spend" stroke="var(--color-primary)" fill="url(#fill)" strokeWidth={2.5} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="spend" stroke="var(--color-chart-1)" fill="url(#fill)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -139,7 +141,22 @@ export default function Dashboard() {
             <h2 className="font-semibold">Recent transactions</h2>
             <p className="mt-1 text-sm text-muted-foreground">Your latest bank activity</p>
           </div>
-          <Link href="/transactions" className="text-sm text-primary">View all</Link>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1">
+              {PERIODS.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => setPeriod(o.value)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                    period === o.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <Link href="/transactions" className="text-sm text-primary">View all</Link>
+          </div>
         </div>
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -153,8 +170,12 @@ export default function Dashboard() {
               <tr key={t.id} className="border-t border-border">
                 <td className="px-5 py-4"><b>{t.merchant ?? t.provider}</b><small className="mt-1 block text-xs text-muted-foreground">{formatDate(t.occurredAt)}</small></td>
                 <td className="px-5 py-4 font-mono text-xs">{t.provider}</td>
-                <td className="px-5 py-4 text-xs">{t.type === 'Credit' ? <ArrowDownLeft className="mr-1 inline size-3 text-primary" /> : <ArrowUpRight className="mr-1 inline size-3 text-muted-foreground" />}{t.type}</td>
-                <td className={`px-5 py-4 text-right font-mono text-xs ${t.type === 'Credit' ? 'text-primary' : ''}`}>{t.type === 'Credit' ? '+' : '-'}{formatEtb(t.amountCents)}</td>
+                <td className="px-5 py-4">
+                  {t.type === 'Credit'
+                    ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><ArrowDownLeft className="size-3" /> Credit</span>
+                    : <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400"><ArrowUpRight className="size-3" /> Debit</span>}
+                </td>
+                <td className={`px-5 py-4 text-right font-mono text-xs font-semibold ${t.type === 'Credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{t.type === 'Credit' ? '+' : '-'}{formatEtb(t.amountCents)}</td>
                 <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{t.referenceId}</td>
                 <td className="px-5 py-4">{t.tag && <span className="rounded-md bg-secondary px-2 py-1 text-xs">{t.tag}</span>}</td>
               </tr>

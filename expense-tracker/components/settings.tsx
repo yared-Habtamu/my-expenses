@@ -129,7 +129,7 @@ export default function Settings() {
         const res = await fetch('/api/sms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sender: m.sender, payload: m.body }),
+          body: JSON.stringify({ sender: m.sender, payload: m.body, occurredAt: new Date(m.date).toISOString() }),
         })
         const d = await res.json()
         if (d.parsed) d.duplicate ? duplicates++ : imported++

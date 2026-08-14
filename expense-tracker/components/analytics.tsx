@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet } from 'lucide-react'
 import { formatDate, formatEtb } from '@/lib/format'
+import { ChartTooltip } from '@/components/chart-tooltip'
+import { StatCard } from '@/components/stat-card'
 
 interface Analytics {
   monthSpendCents: number
@@ -17,7 +19,9 @@ interface Analytics {
   totalBalanceCents: number
 }
 
-const COLORS = ['var(--color-primary)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)']
+const COLORS = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)']
+
+const TICK = { fill: 'var(--color-muted-foreground)', fontSize: 12 }
 
 export default function Analytics() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
@@ -42,26 +46,17 @@ export default function Analytics() {
       <p className="mt-1 text-sm text-muted-foreground">Spending and income across your linked accounts.</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Spend</span><ArrowDownLeft className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{formatEtb(analytics.monthSpendCents)}</p>
-          <p className="mt-2 text-xs text-primary">{analytics.monthCount} transactions</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Income</span><ArrowUpRight className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{formatEtb(analytics.monthIncomeCents)}</p>
-          <p className="mt-2 text-xs text-primary">Credits this month</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Net flow</span><TrendingUp className="size-4 text-primary" /></div>
-          <p className={`mt-5 font-mono text-xl font-semibold ${net >= 0 ? 'text-primary' : 'text-destructive'}`}>{net >= 0 ? '+' : '-'}{formatEtb(Math.abs(net))}</p>
-          <p className="mt-2 text-xs text-primary">{net >= 0 ? 'Positive cash flow' : 'Spending exceeded income'}</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Total balance</span><Wallet className="size-4 text-primary" /></div>
-          <p className="mt-5 font-mono text-xl font-semibold">{formatEtb(analytics.totalBalanceCents)}</p>
-          <p className="mt-2 text-xs text-primary">Across all accounts</p>
-        </div>
+        <StatCard label="Spend" icon={ArrowDownLeft} accent="rose" value={formatEtb(analytics.monthSpendCents)} caption={`${analytics.monthCount} transactions`} />
+        <StatCard label="Income" icon={ArrowUpRight} accent="emerald" value={formatEtb(analytics.monthIncomeCents)} caption="Credits this month" />
+        <StatCard
+          label="Net flow"
+          icon={TrendingUp}
+          accent={net >= 0 ? 'emerald' : 'rose'}
+          value={`${net >= 0 ? '+' : '-'}${formatEtb(Math.abs(net))}`}
+          valueClassName={net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}
+          caption={net >= 0 ? 'Positive cash flow' : 'Spending exceeded income'}
+        />
+        <StatCard label="Total balance" icon={Wallet} accent="violet" value={formatEtb(analytics.totalBalanceCents)} caption="Across all accounts" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
@@ -73,15 +68,15 @@ export default function Analytics() {
               <AreaChart data={daily}>
                 <defs>
                   <linearGradient id="analyticsFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity=".25" />
-                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity="0" />
+                    <stop offset="5%" stopColor="var(--color-chart-2)" stopOpacity=".3" />
+                    <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="var(--color-border)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => formatEtb(Number(v))} />
-                <Area type="monotone" dataKey="spend" stroke="var(--color-primary)" fill="url(#analyticsFill)" strokeWidth={2.5} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} />
+                <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="spend" stroke="var(--color-chart-2)" fill="url(#analyticsFill)" strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -120,7 +115,7 @@ export default function Analytics() {
                 <Pie data={analytics.providers} dataKey="amount" nameKey="provider" innerRadius="55%" outerRadius="80%" paddingAngle={3}>
                   {analytics.providers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v) => formatEtb(Number(v))} />
+                <Tooltip content={<ChartTooltip />} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -133,9 +128,9 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics.providers} layout="vertical" margin={{ left: 8 }}>
                 <CartesianGrid horizontal={false} stroke="var(--color-border)" />
-                <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="provider" axisLine={false} tickLine={false} width={70} />
-                <Tooltip formatter={(v) => formatEtb(Number(v))} cursor={{ fill: 'var(--color-secondary)' }} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={TICK} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="provider" axisLine={false} tickLine={false} tick={TICK} width={70} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--color-secondary)' }} />
                 <Bar dataKey="amount" radius={[4, 4, 4, 4]}>
                   {analytics.providers.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>

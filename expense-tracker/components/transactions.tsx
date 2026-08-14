@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDownLeft, ArrowUpRight, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { formatDate, formatEtb } from '@/lib/format'
+import { StatCard } from '@/components/stat-card'
 
 interface Transaction {
   id: string
@@ -18,13 +19,23 @@ interface Transaction {
 
 const EMPTY_FORM = { provider: '', type: 'Debit', merchant: '', amount: '', tag: '', occurredAt: '' }
 
+const PERIODS = [
+  { label: 'All', value: 'All' },
+  { label: 'Daily', value: 'Day' },
+  { label: 'Weekly', value: 'Week' },
+  { label: 'Monthly', value: 'Month' },
+]
+
 function TransactionsInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [total, setTotal] = useState(0)
+  const [totalDebitCents, setTotalDebitCents] = useState(0)
+  const [totalCreditCents, setTotalCreditCents] = useState(0)
   const [type, setType] = useState('All')
+  const [period, setPeriod] = useState('All')
   const [provider, setProvider] = useState('All')
   const [tag, setTag] = useState('All')
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
@@ -47,6 +58,7 @@ function TransactionsInner() {
     setLoading(true)
     const params = new URLSearchParams()
     if (type !== 'All') params.set('type', type)
+    if (period !== 'All') params.set('period', period)
     if (provider !== 'All') params.set('provider', provider)
     if (tag !== 'All') params.set('tag', tag)
     if (search) params.set('search', search)
@@ -59,14 +71,16 @@ function TransactionsInner() {
         setTransactions(d.transactions)
         setTags(d.tags)
         setTotal(d.total)
+        setTotalDebitCents(d.totalDebitCents ?? 0)
+        setTotalCreditCents(d.totalCreditCents ?? 0)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
     return () => { cancelled = true }
-  }, [type, provider, tag, search, offset])
+  }, [type, period, provider, tag, search, offset])
 
   const resetFilters = () => {
-    setType('All'); setProvider('All'); setTag('All'); setSearch(''); setOffset(0)
+    setType('All'); setPeriod('All'); setProvider('All'); setTag('All'); setSearch(''); setOffset(0)
     router.replace('/transactions')
   }
 
@@ -106,6 +120,7 @@ function TransactionsInner() {
       setOffset(0)
       const params = new URLSearchParams()
       if (type !== 'All') params.set('type', type)
+      if (period !== 'All') params.set('period', period)
       if (provider !== 'All') params.set('provider', provider)
       if (tag !== 'All') params.set('tag', tag)
       if (search) params.set('search', search)
@@ -113,6 +128,8 @@ function TransactionsInner() {
       setTransactions(d.transactions)
       setTags(d.tags)
       setTotal(d.total)
+      setTotalDebitCents(d.totalDebitCents ?? 0)
+      setTotalCreditCents(d.totalCreditCents ?? 0)
     }
     setSaving(false)
   }
@@ -141,6 +158,19 @@ function TransactionsInner() {
         <button onClick={openAdd} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"><Plus className="size-4" /> Add transaction</button>
       </div>
 
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Total debits" icon={ArrowUpRight} accent="rose" value={formatEtb(totalDebitCents)} caption={`${total} records`} />
+        <StatCard label="Total credits" icon={ArrowDownLeft} accent="emerald" value={formatEtb(totalCreditCents)} caption="Money in" />
+        <StatCard
+          label="Net flow"
+          icon={Plus}
+          accent={totalCreditCents - totalDebitCents >= 0 ? 'emerald' : 'rose'}
+          value={`${totalCreditCents - totalDebitCents >= 0 ? '+' : '-'}${formatEtb(Math.abs(totalCreditCents - totalDebitCents))}`}
+          valueClassName={totalCreditCents - totalDebitCents >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}
+          caption="In − Out"
+        />
+      </div>
+
       <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -151,9 +181,40 @@ function TransactionsInner() {
             className="h-10 w-full rounded-xl border border-border bg-background pl-10 pr-3 text-sm outline-none focus:border-primary/50"
           />
         </div>
-        <select value={type} onChange={(e) => { setType(e.target.value); setOffset(0) }} className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50">
-          <option>All</option><option>Debit</option><option>Credit</option>
-        </select>
+        <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1">
+          {['All', 'Debit', 'Credit'].map((o) => (
+            <button
+              key={o}
+              onClick={() => { setType(o); setOffset(0) }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                type === o
+                  ? o === 'Debit'
+                    ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                    : o === 'Credit'
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 rounded-xl border border-border bg-background p-1">
+          {PERIODS.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { setPeriod(o.value); setOffset(0) }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                period === o.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
         <select value={provider} onChange={(e) => { setProvider(e.target.value); setOffset(0) }} className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/50">
           <option>All</option>
           {providers.map((p) => <option key={p}>{p}</option>)}
@@ -162,7 +223,7 @@ function TransactionsInner() {
           <option>All</option>
           {tags.map((t) => <option key={t}>{t}</option>)}
         </select>
-        {(type !== 'All' || provider !== 'All' || tag !== 'All' || search) && (
+        {(type !== 'All' || period !== 'All' || provider !== 'All' || tag !== 'All' || search) && (
           <button onClick={resetFilters} className="flex items-center gap-1 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:text-foreground"><X className="size-3.5" /> Clear</button>
         )}
       </div>
@@ -183,8 +244,12 @@ function TransactionsInner() {
               <tr key={t.id} className="border-t border-border">
                 <td className="px-5 py-4"><b>{t.merchant ?? t.provider}</b><small className="mt-1 block text-xs text-muted-foreground">{formatDate(t.occurredAt)}</small></td>
                 <td className="px-5 py-4 font-mono text-xs">{t.provider}</td>
-                <td className="px-5 py-4 text-xs">{t.type === 'Credit' ? <ArrowDownLeft className="mr-1 inline size-3 text-primary" /> : <ArrowUpRight className="mr-1 inline size-3 text-muted-foreground" />}{t.type}</td>
-                <td className={`px-5 py-4 text-right font-mono text-xs ${t.type === 'Credit' ? 'text-primary' : ''}`}>{t.type === 'Credit' ? '+' : '-'}{formatEtb(t.amountCents)}</td>
+                <td className="px-5 py-4">
+                  {t.type === 'Credit'
+                    ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><ArrowDownLeft className="size-3" /> Credit</span>
+                    : <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400"><ArrowUpRight className="size-3" /> Debit</span>}
+                </td>
+                <td className={`px-5 py-4 text-right font-mono text-xs font-semibold ${t.type === 'Credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{t.type === 'Credit' ? '+' : '-'}{formatEtb(t.amountCents)}</td>
                 <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{t.referenceId}</td>
                 <td className="px-5 py-4">
                   <select
