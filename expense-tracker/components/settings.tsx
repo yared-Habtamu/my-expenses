@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Bell, Check, ChevronDown, Plus, RefreshCw, Shield, Trash2, User, Wallet, X } from 'lucide-react'
+import { Bell, Check, ChevronDown, Phone, Plus, RefreshCw, Shield, Trash2, User, Wallet, X } from 'lucide-react'
 import { formatEtb } from '@/lib/format'
+import { isNative, readSms, requestSmsPermission, smsPermission, type SmsMessage } from '@/lib/sms'
 
 interface Account {
   id: string
@@ -27,6 +28,15 @@ export default function Settings() {
   const [smsProvider, setSmsProvider] = useState('CBE')
   const [smsPayload, setSmsPayload] = useState('')
   const [smsResult, setSmsResult] = useState<{ parsed: boolean; message: string } | null>(null)
+
+  const [native] = useState(isNative())
+  const [smsGranted, setSmsGranted] = useState(false)
+  const [smsImporting, setSmsImporting] = useState(false)
+
+  useEffect(() => {
+    if (!isNative()) return
+    smsPermission().then((p) => setSmsGranted(p === 'granted'))
+  }, [])
 
   useEffect(() => {
     fetch('/api/settings')
@@ -103,6 +113,35 @@ export default function Settings() {
     }
   }
 
+  const grantSms = async () => {
+    const p = await requestSmsPermission()
+    setSmsGranted(p === 'granted')
+  }
+
+  const importSms = async () => {
+    if (!smsGranted) return
+    setSmsImporting(true)
+    try {
+      const messages: SmsMessage[] = await readSms(200, '(?i).*(cbe|cbebirr|telebirr|abyssinia|boa|awash|dashen|nib|wegagen|abay|zemen|bunna|127).*')
+      let imported = 0
+      let duplicates = 0
+      for (const m of messages) {
+        const res = await fetch('/api/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender: m.sender, payload: m.body }),
+        })
+        const d = await res.json()
+        if (d.parsed) d.duplicate ? duplicates++ : imported++
+      }
+      setSmsResult({ parsed: true, message: `Scanned ${messages.length} bank messages — ${imported} new, ${duplicates} already imported.` })
+    } catch {
+      setSmsResult({ parsed: false, message: 'Could not read SMS. Check that SMS permission is granted.' })
+    } finally {
+      setSmsImporting(false)
+    }
+  }
+
   if (loading) return <p className="p-8 text-sm text-muted-foreground">Loading settings…</p>
 
   return (
@@ -149,6 +188,28 @@ export default function Settings() {
             </button>
           </div>
           <p className="mt-5 text-sm text-muted-foreground">{smsListener ? 'Your listener is on. Incoming bank SMS are parsed and saved as transactions.' : 'Your listener is paused. Incoming SMS are logged but not turned into transactions.'}</p>
+
+          {native && (
+            <div className="mt-5 flex flex-col gap-3 rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Phone className="size-4 text-primary" /> Android SMS access
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {smsGranted
+                  ? 'SMS access granted. New messages from CBE, Telebirr (127), BOA and other banks are parsed automatically and can be imported below.'
+                  : 'Grant SMS access so bank messages (CBE, Telebirr, BOA, …) can be read and turned into transactions.'}
+              </p>
+              {smsGranted ? (
+                <button onClick={importSms} disabled={smsImporting} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50">
+                  <RefreshCw className={`size-4 ${smsImporting ? 'animate-spin' : ''}`} /> Import recent bank SMS
+                </button>
+              ) : (
+                <button onClick={grantSms} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground">
+                  Grant SMS access
+                </button>
+              )}
+            </div>
+          )}
 
           <button onClick={() => setSmsOpen(!smsOpen)} className="mt-6 flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-sm">
             <span className="flex items-center gap-2"><RefreshCw className="size-4 text-muted-foreground" /> Simulate an incoming SMS</span>

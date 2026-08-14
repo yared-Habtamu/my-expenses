@@ -3,26 +3,23 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { isNative, smsPermission } from '@/lib/sms'
 import {
   Bot,
-  CreditCard,
-  LayoutDashboard,
   Menu,
   MessageSquare,
-  PieChart,
   Search,
   Send,
-  Settings,
   Smartphone,
   Sparkles,
   Wallet,
 } from 'lucide-react'
 
 const NAV = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { label: 'Transactions', href: '/transactions', icon: CreditCard },
-  { label: 'Analytics', href: '/analytics', icon: PieChart },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Dashboard', href: '/' },
+  { label: 'Transactions', href: '/transactions' },
+  { label: 'Analytics', href: '/analytics' },
+  { label: 'Settings', href: '/settings' },
 ]
 
 interface Message {
@@ -36,6 +33,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [smsListening, setSmsListening] = useState(true)
+  const [smsGranted, setSmsGranted] = useState(false)
   const [profileName, setProfileName] = useState('')
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: 'Good morning. I have your latest financial picture ready. What would you like to explore?' },
@@ -54,6 +52,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         setProfileName(d.settings?.name ?? '')
       })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (isNative()) smsPermission().then((p) => setSmsGranted(p === 'granted'))
   }, [])
 
   useEffect(() => {
@@ -112,14 +114,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <b className="font-mono text-lg">expense<span className="text-primary">_</span>tracker</b>
         </div>
         <nav className="mt-12 flex flex-col gap-2">
-          {NAV.map(({ label, href, icon: I }) => (
+          {NAV.map(({ label, href }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setNavOpen(false)}
               className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${pathname === href ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
             >
-              <I className="size-4" />
               {label}
             </Link>
           ))}
@@ -137,8 +138,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Smartphone className="size-4 text-primary" />
             SMS listener
           </div>
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">Bank messages are parsed securely in real time.</p>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            {isNative() && !smsGranted
+              ? 'Bank messages from CBE, Telebirr (127) and BOA are parsed in real time once you grant SMS access.'
+              : 'Bank messages are parsed securely in real time.'}
+          </p>
           <p className="mt-4 text-xs font-medium text-primary">{smsListening ? '● Listening for SMS' : '○ SMS listener paused'}</p>
+          {isNative() && !smsGranted && (
+            <Link href="/settings" className="mt-3 block rounded-lg bg-primary/10 px-3 py-2 text-center text-xs font-medium text-primary">
+              Grant SMS access
+            </Link>
+          )}
         </div>
       </aside>
 
